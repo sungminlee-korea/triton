@@ -4,6 +4,7 @@
 #include "triton/Dialect/TritonGPU/IR/Attributes.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "triton/Dialect/TritonGPU/IR/LinearLayoutConversions.h"
+#include "triton/Dialect/TritonGPU/IR/TritonGPUInterfaces.h"
 #include "triton/Tools/LinearLayout.h"
 #include "triton/Tools/StrUtil.h"
 #include "llvm/ADT/DenseMap.h"
@@ -554,8 +555,8 @@ AMDMfmaEncodingAttr::toLinearLayout(ArrayRef<int64_t> shape) const {
 }
 
 std::optional<LinearLayout>
-dotOperandMfmaToLinearLayout(DotOperandEncodingAttr dotMfmaLayout,
-                             ArrayRef<int64_t> shape) {
+mfmaDotToLinearLayout(DotOperandEncodingAttr dotMfmaLayout,
+                      ArrayRef<int64_t> shape) {
 
   // Current linear layout conversion for dot operand is only necessary to
   // enable LDS bypass for operand B in the MFMA dot path. To achieve
@@ -821,13 +822,76 @@ SliceEncodingAttr::toLinearLayout(ArrayRef<int64_t> shape) const {
   return ret;
 }
 
-std::optional<LinearLayout>
-DotOperandEncodingAttr::toLinearLayout(ArrayRef<int64_t> shape) const {
+LinearLayout ampereDotToLinearLayout(ArrayRef<int64_t> shape,
+                                     DotOperandEncodingAttr dot) {
+  // TODO,BE. Implement ampereMMA in terms of this one
+  int rank = shape.size();
+  auto mma = cast<NvidiaMmaEncodingAttr>(dot.getParent());
+  int kWidth = dot.getKWidth();
+  bool isA = dot.getOpIdx() == 0;
 
-  if (auto mfmaLayout = llvm::dyn_cast<AMDMfmaEncodingAttr>(getParent())) {
-    return dotOperandMfmaToLinearLayout(*this, shape);
+  assert(mma.isAmpere());
+  assert(rank == 2 || rank == 3);
+  assert(mma.getInstrShape().size() == rank);
+  assert((rank == 2 && mma.getInstrShape() == ArrayRef<unsigned>({16, 8})) ||
+         (rank == 3 && mma.getInstrShape() == ArrayRef<unsigned>({1, 16, 8})));
+
+  MLIRContext *ctx = mma.getContext();
+  SmallVector<StringAttr> dimNames = standardOutDimNames(ctx, rank);
+
+  // Implement A. For B transpose in the end
+  std::vector<std::vector<int32_t>> registers;
+  std::vector<std::vector<int32_t>> lanes;
+  int32_t i = 1;
+  // kWidth contiguous elements
+  while (i < kWidth) {
+    registers.push_back({i, 0});
+    i *= 2;
+  }
+  // 4 threads per chunk
+  for (int j = 0; j < 2; j++) {
+    lanes.push_back({i, 0});
+    i *= 2;
+  }
+  // 8 threads going down
+  lanes.push_back({0, 1});
+  lanes.push_back({0, 2});
+  lanes.push_back({0, 4});
+  // 2 tiles in column-major order
+  // Just one if it's the B operand
+  if (isA) {
+    registers.push_back({0, 8});
+  }
+  registers.push_back({i, 0});
+
+  if (!isA) {
+    for (auto &r : registers) {
+      std::swap(r[0], r[1]);
+    }
+    for (auto &l : lanes) {
+      std::swap(l[0], l[1]);
+    }
+    std::swap(dimNames[0], dimNames[1]);
   }
 
+  LinearLayout ctaLayout({{S("register"), registers}, {S("lane"), lanes}},
+                         llvm::to_vector(llvm::reverse(ArrayRef(dimNames))));
+
+  ctaLayout *= identityND(S("warp"), dot.getWarpsPerCTA(), {1, 0}, dimNames);
+
+  return combineCtaCgaWithShape(ctaLayout, mma.getCTALayout(), shape);
+}
+
+std::optional<LinearLayout>
+DotOperandEncodingAttr::toLinearLayout(ArrayRef<int64_t> shape) const {
+  auto parent = getParent();
+  if (auto mfma = llvm::dyn_cast<AMDMfmaEncodingAttr>(parent)) {
+    return mfmaDotToLinearLayout(*this, shape);
+  } else if (auto mma = mlir::dyn_cast<NvidiaMmaEncodingAttr>(parent)) {
+    if (mma.isAmpere()) {
+      return ampereDotToLinearLayout(shape, *this);
+    }
+  }
   return std::nullopt;
 }
 
