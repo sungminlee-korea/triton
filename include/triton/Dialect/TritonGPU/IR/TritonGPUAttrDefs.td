@@ -1347,6 +1347,7 @@ elements along the K dim, or they use all elements of the tensor along the K dim
       auto rank = getWarpsPerCTA().size();
       assert(rank == 2 || rank == 3);
       SmallVector<unsigned> contigPerThread(rank, 1);
+      auto kWidth = getKWidth();
       assert(kWidth != 0 && "Do not support kWidth=0");
       contigPerThread[rank - 1] = kWidth;
       return contigPerThread;
