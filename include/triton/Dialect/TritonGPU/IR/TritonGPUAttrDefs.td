@@ -918,7 +918,7 @@ V [ 0,4,8...60   1,5...61     2,6...62     3,7...63    ]   [ 128,132...188  129,
     SmallVector<unsigned> getShapePerCTATileForDotOperands(ArrayRef<int64_t> shape, int opIdx) const;
     unsigned getTotalElemsPerThreadForOperands(ArrayRef<int64_t> shape, Type eltTy, int kWidth, int opIdx) const;
     SmallVector<int64_t> getInstrShapeForOperands(int kWidth, int opIdx) const;
-    SmallVector<int64_t> getRepForOperands(ArrayRef<int64_t> operandShape, int kWidth, int opIdx) const;
+    SmallVector<int64_t> getRepForOperand(ArrayRef<int64_t> operandShape, int kWidth, int opIdx) const;
 
     SmallVector<unsigned> getContigPerThread() {
       auto rank = getWarpsPerCTA().size();
@@ -1025,7 +1025,7 @@ Row |       warp 0                warp 2
     SmallVector<unsigned> getShapePerCTATileForDotOperands(ArrayRef<int64_t> shape, int opIdx) const;
     unsigned getTotalElemsPerThreadForOperands(ArrayRef<int64_t> shape, Type eltTy, int kWidth, int opIdx) const;
     SmallVector<int64_t> getElemsPerInstrForOperands() const;
-    SmallVector<int64_t> getRepForOperands(ArrayRef<int64_t> operandShape,
+    SmallVector<int64_t> getRepForOperand(ArrayRef<int64_t> operandShape,
                                       Type elemType, int kWidth, int opIdx) const;
     static SmallVector<unsigned> getMNKDimPerInstr();
 
@@ -1222,7 +1222,7 @@ For example, the matrix L corresponding to blockTileSize=[32,16] is:
     SmallVector<int> getMMAv1Rep(int opIdx) const;
     SmallVector<int> getMMAv1ShapePerWarp(int opIdx) const;
     int getMMAv1Vec(int opIdx) const;
-    SmallVector<int64_t> getMMAv2Rep(ArrayRef<int64_t> shape,
+    SmallVector<int64_t> getMMAv2RepForOperand(ArrayRef<int64_t> shape,
                                      int bitwidth, int opIdx) const;
 
     bool supportReduction() const {

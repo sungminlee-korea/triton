@@ -1815,7 +1815,7 @@ AMDWmmaEncodingAttr::getShapePerCTATileForDotOperands(ArrayRef<int64_t> shape,
 
 unsigned AMDWmmaEncodingAttr::getTotalElemsPerThreadForOperands(
     ArrayRef<int64_t> shape, Type eltTy, int kWidth, int opIdx) const {
-  auto rep = getRepForOperands(shape, eltTy, kWidth, opIdx);
+  auto rep = getRepForOperand(shape, eltTy, kWidth, opIdx);
   return product(rep) * kWidth;
 }
 
@@ -1824,9 +1824,9 @@ SmallVector<int64_t> AMDWmmaEncodingAttr::getElemsPerInstrForOperands() const {
 }
 
 SmallVector<int64_t>
-AMDWmmaEncodingAttr::getRepForOperands(ArrayRef<int64_t> operandShape,
-                                       Type elemType, int kWidth,
-                                       int opIdx) const {
+AMDWmmaEncodingAttr::getRepForOperand(ArrayRef<int64_t> operandShape,
+                                      Type elemType, int kWidth,
+                                      int opIdx) const {
   auto operandTileShape = getElemsPerInstrForOperands();
   assert(operandTileShape.size() == 2);
   auto warpsPerCTA = getWarpsPerCTA();

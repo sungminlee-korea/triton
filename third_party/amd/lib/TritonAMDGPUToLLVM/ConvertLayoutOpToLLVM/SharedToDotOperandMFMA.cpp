@@ -231,12 +231,12 @@ Value convertLayout(int opIdx, ConversionPatternRewriter &rewriter,
     mfmaInstrK = elemsPerInstr[kDimIdx];
   }
 
-  auto numReps = mfmaLayout.getRepForOperands(shape, kWidth, opIdx);
+  auto numReps = mfmaLayout.getRepForOperand(shape, kWidth, opIdx);
   auto numRepNonK = numReps[nonKDimIdx];
   auto numRepK = numReps[kDimIdx];
   auto repB = numReps[0];
   // TODO(Lixun): make it simpler
-  // getRepForOperands always returns a 3D vector
+  // getRepForOperand always returns a 3D vector
   if (rank == 2) {
     numRepNonK = numReps[nonKDimIdx + 1];
     numRepK = numReps[kDimIdx + 1];
