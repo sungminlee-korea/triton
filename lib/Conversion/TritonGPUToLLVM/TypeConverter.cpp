@@ -70,19 +70,12 @@ Type TritonGPUToLLVMTypeConverter::convertTritonPointerType(
   return LLVM::LLVMPointerType::get(ctx, type.getAddressSpace());
 }
 
-Type TritonGPUToLLVMTypeConverter::getElementTypeForStruct(
-    TensorOrMemDesc type) {
-  auto ctx = type.getContext();
-  Attribute layout = type.getEncoding();
-  return convertType(type.getElementType());
-}
-
 Type TritonGPUToLLVMTypeConverter::convertTritonTensorType(
     RankedTensorType type, const TargetInfoBase &targetInfo) {
   auto ctx = type.getContext();
   Attribute layout = type.getEncoding();
   SmallVector<int64_t> shape(type.getShape().begin(), type.getShape().end());
-  Type eltType = getElementTypeForStruct(cast<TensorOrMemDesc>(type));
+  Type eltType = convertType(type.getElementType());
 
   if (auto shared_layout = mlir::dyn_cast<SharedEncodingAttr>(layout)) {
     SmallVector<Type, 4> types;

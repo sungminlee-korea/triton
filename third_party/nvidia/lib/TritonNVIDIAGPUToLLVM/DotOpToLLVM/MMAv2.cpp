@@ -1,9 +1,6 @@
 #include "TritonNVIDIAGPUToLLVM/PTXAsmFormat.h"
 #include "Utility.h"
 #include "mlir/Support/LLVM.h"
-#include "triton/Conversion/TritonGPUToLLVM/Utility.h"
-#include "triton/Dialect/TritonGPU/IR/Attributes.h"
-#include "llvm/ADT/SmallVector.h"
 
 using namespace mlir;
 using namespace mlir::triton;
@@ -64,47 +61,23 @@ ValueTableV2 getValuesFromDotOperandLayoutStruct(
   auto elems = unpackLLElements(loc, value, rewriter);
   int offset{};
   ValueTableV2 vals;
-
-  // Can be generalised for kWidth * elemBitWidth > 32
-  auto dot = cast<DotOperandEncodingAttr>(type.getEncoding());
-  auto largeK = dot.getKWidth() == 8 &&
-                cast<NvidiaMmaEncodingAttr>(dot.getParent()).isAmpere();
-  if (largeK) {
-    llvm::SmallVector<unsigned> si;
-
-    // For kWidth = 8, split the mma into 4 mmas with "stride 4" along K
-    if (dot.getOpIdx() == 0) {
-      si = llvm::SmallVector<unsigned>{0, 8,  4, 12, 1, 9,  5, 13,
-                                       2, 10, 6, 14, 3, 11, 7, 15};
-    } else {
-      si = llvm::SmallVector<unsigned>{0, 4, 1, 5, 2, 6, 3, 7};
-    }
-
-    auto step = si.size();
-    SmallVector<Value> perm(step);
-    for (auto i = 0; i < elems.size() / step; ++i) {
-      for (auto j = 0; j < step; ++j) {
-        perm[j] = elems[i * step + si[j]];
-      }
-      std::copy(perm.begin(), perm.end(), elems.begin() + i * step);
-    }
-    if (dot.getOpIdx() == 1) {
-      for (auto b = 0; b < batch; ++b)
-        for (auto i = 0; i < n0 * 2; ++i)
-          for (auto j = 0; j < n1 * 2; ++j) {
-            vals[{b, i, j}] = elems[offset++];
-          }
-      return vals;
-    }
-  }
+  auto vecTy = vec_ty(typeConverter->convertType(type.getElementType()), 32);
 
   for (auto b = 0; b < batch; ++b)
     for (auto i = 0; i < n0; ++i) {
       for (auto j = 0; j < n1; j++) {
-        vals[{b, 2 * i, 2 * j}] = elems[offset++];
-        vals[{b, 2 * i, 2 * j + 1}] = elems[offset++];
-        vals[{b, 2 * i + 1, 2 * j}] = elems[offset++];
-        vals[{b, 2 * i + 1, 2 * j + 1}] = elems[offset++];
+        auto extractElemFn = [&](auto &&...idx) {
+          auto vec = elems[offset++];
+          auto val = bitcast(vec, vecTy);
+          for (int k = 0;
+               k < 32 / type.getElementType().getIntOrFloatBitWidth(); ++k) {
+            vals[{idx...}] = extract_element(val, i32_val(k));
+          }
+        };
+        extractElemFn(b, 2 * i, 2 * j);
+        extractElemFn(b, 2 * i, 2 * j + 1);
+        extractElemFn(b, 2 * i + 1, 2 * j);
+        extractElemFn(b, 2 * i + 1, 2 * j + 1);
       }
     }
   return vals;
