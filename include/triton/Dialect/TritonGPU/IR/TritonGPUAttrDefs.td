@@ -1239,7 +1239,7 @@ For example, the matrix L corresponding to blockTileSize=[32,16] is:
       assert(isVolta() || isAmpere() || isHopper());
       auto rank = getWarpsPerCTA().size();
       SmallVector<unsigned> contigPerThread(rank, 1);
-      contigPerThread[rank - 1] = 2;
+      contigPerThread[rank - 1] = kWidth;
       return contigPerThread;
     };
 
