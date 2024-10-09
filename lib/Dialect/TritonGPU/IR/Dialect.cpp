@@ -974,9 +974,16 @@ DotOperandEncodingAttr::getElemsPerThread(ArrayRef<int64_t> shape,
         elemsPerThread[0] = rep[0];
       auto origKWidth = std::max<unsigned>(32 / bitwidth, 1);
       auto fold = std::max<unsigned>(kWidth / origKWidth, 1);
-      rep[2] = std::max<unsigned>(1, rep[2] / fold);
+      auto kDim = (idx == 0) ? 2 : 1;
+      rep[kDim] = std::max<unsigned>(1, rep[kDim] / fold);
       elemsPerThread[rank - 2] = (idx == 0) ? rep[1] * 2 : rep[1] * kWidth * 2;
       elemsPerThread[rank - 1] = (idx == 0) ? rep[2] * kWidth * 2 : rep[2];
+      llvm::errs() << "elemsPerThread[rank - 2] = " << elemsPerThread[rank - 2]
+                   << "\n";
+      llvm::errs() << "elemsPerThread[rank - 1] = " << elemsPerThread[rank - 1]
+                   << "\n";
+      llvm::errs() << "rep[1] = " << rep[1] << "\n";
+      llvm::errs() << "rep[2] = " << rep[2] << "\n";
       return elemsPerThread;
     }
   }
