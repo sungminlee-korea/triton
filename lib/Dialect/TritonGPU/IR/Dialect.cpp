@@ -954,18 +954,17 @@ unsigned SharedEncodingAttr::getTotalElemsPerThread(ArrayRef<int64_t> shape,
 SmallVector<unsigned>
 DotOperandEncodingAttr::getElemsPerThread(ArrayRef<int64_t> shape,
                                           Type eltTy) const {
+  auto rank = shape.size();
+  assert(rank == 2 || rank == 3);
 
-  if (auto parent = mlir::dyn_cast<AMDMfmaEncodingAttr>(getParent())) {
-    auto rank = shape.size();
-    assert(rank == 2 || rank == 3);
+  auto idx = getOpIdx();
+  assert(idx == 0 || idx == 1);
 
-    auto idx = getOpIdx();
-    assert(idx == 0 || idx == 1);
-
-    SmallVector<unsigned> elemsPerThread(rank);
-
-    auto kWidth = getKWidth();
-    auto rep = parent.getMFMARepForOperands(shape, kWidth, idx);
+  auto kWidth = getKWidth();
+  auto parent = getParent();
+  SmallVector<unsigned> elemsPerThread(rank);
+  if (auto mfma = mlir::dyn_cast<AMDMfmaEncodingAttr>(parent)) {
+    auto rep = mfma.getRepForOperand(shape, kWidth, idx);
 
     if (rank == 3)
       elemsPerThread[0] = rep[0];
@@ -973,8 +972,20 @@ DotOperandEncodingAttr::getElemsPerThread(ArrayRef<int64_t> shape,
     elemsPerThread[rank - 1] = (idx == 0) ? rep[2] * kWidth : rep[2];
 
     return elemsPerThread;
+  } else if (auto mma = mlir::dyn_cast<NvidiaMmaEncodingAttr>(parent)) {
+    if (mma.isAmpere()) {
+      auto bitwidth = getPointeeType(eltTy).getIntOrFloatBitWidth();
+      auto rep = mma.getMMAv2RepForOperand(shape, bitwidth, idx);
+      if (rank == 3)
+        elemsPerThread[0] = rep[0];
+      auto origKWidth = std::max<unsigned>(32 / bitwidth, 1);
+      auto fold = std::max<unsigned>(kWidth / origKWidth, 1);
+      rep[2] = std::max<unsigned>(1, rep[2] / fold);
+      elemsPerThread[rank - 2] = (idx == 0) ? rep[1] * 2 : rep[1] * kWidth * 2;
+      elemsPerThread[rank - 1] = (idx == 0) ? rep[2] * kWidth * 2 : rep[2];
+      return elemsPerThread;
+    }
   }
-
   llvm_unreachable("getElemsPerThread is not supported for dot operand");
   return SmallVector<unsigned>();
 }
@@ -982,8 +993,7 @@ DotOperandEncodingAttr::getElemsPerThread(ArrayRef<int64_t> shape,
 unsigned DotOperandEncodingAttr::getTotalElemsPerThread(ArrayRef<int64_t> shape,
                                                         Type eltTy) const {
   if (auto mmaParent = mlir::dyn_cast<MmaEncodingTrait>(getParent())) {
-    return mmaParent.getTotalElemsPerThreadForOperands(shape, eltTy,
-                                                       getKWidth(), getOpIdx());
+    return product<unsigned>(getElemsPerThread(shape, eltTy));
   }
   if (auto blockedLayout = mlir::dyn_cast<BlockedEncodingAttr>(getParent())) {
     auto shapePerCTA = getShapePerCTA(*this, shape);
@@ -1637,7 +1647,7 @@ SmallVector<unsigned> AMDMfmaEncodingAttr::getSizePerThread() const {
 }
 
 SmallVector<int64_t>
-AMDMfmaEncodingAttr::getMFMAInstrShapeForOperands(int kWidth, int opIdx) const {
+AMDMfmaEncodingAttr::getInstrShapeForOperands(int kWidth, int opIdx) const {
   unsigned mDim = getMDim();
   unsigned nDim = getNDim();
   assert((mDim == nDim) && (mDim == 32 || mDim == 16 || mDim == 4) ||
@@ -1657,9 +1667,9 @@ AMDMfmaEncodingAttr::getMFMAInstrShapeForOperands(int kWidth, int opIdx) const {
 }
 
 SmallVector<int64_t>
-AMDMfmaEncodingAttr::getMFMARepForOperands(ArrayRef<int64_t> operandShape,
-                                           int kWidth, int opIdx) const {
-  auto operandTileShape = getMFMAInstrShapeForOperands(kWidth, opIdx);
+AMDMfmaEncodingAttr::getRepForOperand(ArrayRef<int64_t> operandShape,
+                                      int kWidth, int opIdx) const {
+  auto operandTileShape = getInstrShapeForOperands(kWidth, opIdx);
   auto rank = operandShape.size();
   auto warpsPerCTA = getWarpsPerCTA();
   int numRepBatch =
@@ -1682,7 +1692,7 @@ AMDMfmaEncodingAttr::getMFMARepForOperands(ArrayRef<int64_t> operandShape,
 
 unsigned AMDMfmaEncodingAttr::getTotalElemsPerThreadForOperands(
     ArrayRef<int64_t> shape, Type eltTy, int kWidth, int opIdx) const {
-  auto rep = getMFMARepForOperands(shape, kWidth, opIdx);
+  auto rep = getRepForOperand(shape, kWidth, opIdx);
   return product(rep) * kWidth;
 }
 
@@ -2007,12 +2017,13 @@ SmallVector<int> NvidiaMmaEncodingAttr::getMMAv1ShapePerWarp(int opIdx) const {
 int NvidiaMmaEncodingAttr::getMMAv1Vec(int opIdx) const {
   return 2 * getMMAv1Rep(opIdx)[opIdx];
 }
-SmallVector<int64_t> NvidiaMmaEncodingAttr::getMMAv2Rep(ArrayRef<int64_t> shape,
-                                                        int bitwidth,
-                                                        int opIdx) const {
+SmallVector<int64_t>
+NvidiaMmaEncodingAttr::getMMAv2RepForOperand(ArrayRef<int64_t> shape,
+                                             int bitwidth, int opIdx) const {
   auto rank = shape.size();
   auto warpsPerCTA = getWarpsPerCTA();
-  SmallVector<int> shapePerWarp = {1, 16, 8, 4 * 64 / bitwidth};
+  SmallVector<int> shapePerWarp = {1, /*m=*/16, /*n=*/8,
+                                   /*k=*/4 * 64 / bitwidth};
   int numRepBatch =
       rank == 3
           ? std::max<int64_t>(1, shape[0] / (shapePerWarp[0] * warpsPerCTA[0]))
@@ -2021,13 +2032,15 @@ SmallVector<int64_t> NvidiaMmaEncodingAttr::getMMAv2Rep(ArrayRef<int64_t> shape,
 
   if (opIdx == 0)
     return {numRepBatch,
+            /*repM=*/
             std::max<int64_t>(1, shape[rank - 2] /
                                      (shapePerWarp[1] * warpsPerCTA[rank - 2])),
-            std::max<int64_t>(1, shape[rank - 1] / shapePerWarp[3])};
+            /*repK=*/std::max<int64_t>(1, shape[rank - 1] / shapePerWarp[3])};
   else {
     assert(opIdx == 1);
     return {numRepBatch,
-            std::max<int64_t>(1, shape[rank - 2] / shapePerWarp[3]),
+            /*repK=*/std::max<int64_t>(1, shape[rank - 2] / shapePerWarp[3]),
+            /*repN=*/
             std::max<int64_t>(1, shape[rank - 1] / (shapePerWarp[2] *
                                                     warpsPerCTA[rank - 1]))};
   }
@@ -2043,7 +2056,9 @@ unsigned NvidiaMmaEncodingAttr::getTotalElemsPerThreadForOperands(
   }
   // A100
   if (isAmpere()) {
-    auto rep = getMMAv2Rep(shapePerCTA, eltTy.getIntOrFloatBitWidth(), opIdx);
+    auto pointeeTy = getPointeeType(eltTy);
+    auto rep = getMMAv2RepForOperand(shapePerCTA,
+                                     pointeeTy.getIntOrFloatBitWidth(), opIdx);
     if (opIdx == 0)
       return 4 * rep[0] * rep[1] * rep[2];
     if (opIdx == 1)

@@ -74,17 +74,7 @@ Type TritonGPUToLLVMTypeConverter::getElementTypeForStruct(
     TensorOrMemDesc type) {
   auto ctx = type.getContext();
   Attribute layout = type.getEncoding();
-  Type elemTy = convertType(type.getElementType());
-  auto dotOpLayout = mlir::dyn_cast<DotOperandEncodingAttr>(layout);
-  if (!dotOpLayout)
-    return elemTy;
-  auto mmaParent =
-      mlir::dyn_cast<NvidiaMmaEncodingAttr>(dotOpLayout.getParent());
-  if (!mmaParent || mmaParent.isHopper())
-    return elemTy;
-  int bitwidth = elemTy.getIntOrFloatBitWidth();
-  assert(bitwidth <= 32);
-  return IntegerType::get(ctx, 32);
+  return convertType(type.getElementType());
 }
 
 Type TritonGPUToLLVMTypeConverter::convertTritonTensorType(

@@ -917,8 +917,8 @@ V [ 0,4,8...60   1,5...61     2,6...62     3,7...63    ]   [ 128,132...188  129,
     SmallVector<unsigned> getSizePerThreadForOperands(unsigned opIdx) const;
     SmallVector<unsigned> getShapePerCTATileForDotOperands(ArrayRef<int64_t> shape, int opIdx) const;
     unsigned getTotalElemsPerThreadForOperands(ArrayRef<int64_t> shape, Type eltTy, int kWidth, int opIdx) const;
-    SmallVector<int64_t> getMFMAInstrShapeForOperands(int kWidth, int opIdx) const;
-    SmallVector<int64_t> getMFMARepForOperands(ArrayRef<int64_t> operandShape, int kWidth, int opIdx) const;
+    SmallVector<int64_t> getInstrShapeForOperands(int kWidth, int opIdx) const;
+    SmallVector<int64_t> getRepForOperands(ArrayRef<int64_t> operandShape, int kWidth, int opIdx) const;
 
     SmallVector<unsigned> getContigPerThread() {
       auto rank = getWarpsPerCTA().size();
@@ -1336,6 +1336,7 @@ elements along the K dim, or they use all elements of the tensor along the K dim
         return $_get(context, opIdx, parent, 0);
       unsigned bitwidth = eltTy.getIntOrFloatBitWidth();
       unsigned MMAv2kWidth = 32 / bitwidth;
+      llvm::errs() << "MMAv2 bitWidth: " << bitwidth << "\n";
       return $_get(context, opIdx, parent, MMAv2kWidth);
     }]>
   ];
