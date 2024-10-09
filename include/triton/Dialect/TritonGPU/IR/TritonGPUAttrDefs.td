@@ -1239,7 +1239,7 @@ For example, the matrix L corresponding to blockTileSize=[32,16] is:
       assert(isVolta() || isAmpere() || isHopper());
       auto rank = getWarpsPerCTA().size();
       SmallVector<unsigned> contigPerThread(rank, 1);
-      contigPerThread[rank - 1] = kWidth;
+      contigPerThread[rank - 1] = 2;
       return contigPerThread;
     };
 
@@ -1336,7 +1336,6 @@ elements along the K dim, or they use all elements of the tensor along the K dim
         return $_get(context, opIdx, parent, 0);
       unsigned bitwidth = eltTy.getIntOrFloatBitWidth();
       unsigned MMAv2kWidth = 32 / bitwidth;
-      llvm::errs() << "MMAv2 bitWidth: " << bitwidth << "\n";
       return $_get(context, opIdx, parent, MMAv2kWidth);
     }]>
   ];
@@ -1345,7 +1344,12 @@ elements along the K dim, or they use all elements of the tensor along the K dim
   let genVerifyDecl = 1;
   let extraClassDeclaration = extraDistributedDeclaration # [{
     SmallVector<unsigned> getContigPerThread() {
-      return getSizePerThread();
+      auto rank = getWarpsPerCTA().size();
+      assert(rank == 2 || rank == 3);
+      SmallVector<unsigned> contigPerThread(rank, 1);
+      assert(kWidth != 0 && "Do not support kWidth=0");
+      contigPerThread[rank - 1] = kWidth;
+      return contigPerThread;
     };
   }];
 }
