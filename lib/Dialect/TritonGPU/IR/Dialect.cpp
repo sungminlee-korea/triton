@@ -2164,6 +2164,10 @@ NvidiaMmaEncodingAttr::getSizePerThreadForOperands(unsigned opIdx) const {
 // DotOperand Encoding
 //===----------------------------------------------------------------------===//
 SmallVector<unsigned> DotOperandEncodingAttr::getThreadsPerWarp() const {
+  auto parent = getParent();
+  if (auto mma = mlir::dyn_cast<NvidiaMmaEncodingAttr>(parent)) {
+    return mma.getThreadsPerWarp();
+  }
   llvm::report_fatal_error(
       "getThreadsPerWarp not implemented for DotOperandEncodingAttr");
 }
