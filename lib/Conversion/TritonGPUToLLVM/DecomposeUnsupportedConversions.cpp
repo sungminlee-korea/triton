@@ -57,7 +57,9 @@ void decomposeTensorCoreToDotLayoutConversion(ModuleOp module,
     auto srcMma = dyn_cast<MmaEncodingTrait>(srcType.getEncoding());
     auto dstDotOp =
         dyn_cast<triton::gpu::DotOperandEncodingAttr>(dstType.getEncoding());
-    if (srcMma && dstDotOp && !shortcutFn(srcType, dstType)) {
+    auto nvidiaMma = dyn_cast<NvidiaMmaEncodingAttr>(srcMma);
+    if (srcMma && dstDotOp && !shortcutFn(srcType, dstType) && nvidiaMma &&
+        !nvidiaMma.isAmpere()) {
       auto tmpType = RankedTensorType::get(
           dstType.getShape(), dstType.getElementType(),
           triton::gpu::BlockedEncodingAttr::get(
