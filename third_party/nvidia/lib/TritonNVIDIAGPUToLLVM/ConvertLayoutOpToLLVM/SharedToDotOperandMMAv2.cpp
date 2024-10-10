@@ -522,8 +522,8 @@ Value composeValuesToDotOperandLayoutStruct(
           }
         };
         insertElemFn(b, 2 * m, 2 * k);
-        insertElemFn(b, 2 * m, 2 * k + 1);
         insertElemFn(b, 2 * m + 1, 2 * k);
+        insertElemFn(b, 2 * m, 2 * k + 1);
         insertElemFn(b, 2 * m + 1, 2 * k + 1);
       }
   assert(!elems.empty());

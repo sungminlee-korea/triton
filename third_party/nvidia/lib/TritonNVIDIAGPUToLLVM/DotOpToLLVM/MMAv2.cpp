@@ -76,8 +76,8 @@ ValueTableV2 getValuesFromDotOperandLayoutStruct(
           vals[{idx...}] = bitcast(vec, i32_ty);
         };
         extractElemFn(b, 2 * i, 2 * j);
-        extractElemFn(b, 2 * i, 2 * j + 1);
         extractElemFn(b, 2 * i + 1, 2 * j);
+        extractElemFn(b, 2 * i, 2 * j + 1);
         extractElemFn(b, 2 * i + 1, 2 * j + 1);
       }
     }
