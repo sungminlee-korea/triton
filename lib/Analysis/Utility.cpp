@@ -723,7 +723,8 @@ bool isMmaToDotShortcut(RankedTensorType srcTy, RankedTensorType dstTy) {
   auto dotElemsPerThread = getElemsPerThread(dstTy);
   return mmaLayout && dotOperandLayout && mmaLayout.getVersionMajor() == 2 &&
          mmaLayout.getWarpsPerCTA()[1] == 1 &&
-         dotOperandLayout.getOpIdx() == 0 &&
+         dotOperandLayout.getOpIdx() == 0 && srcTy.getShape()[0] >= 16 &&
+         srcTy.getShape()[1] >= 8 &&
          mmaElemsPerThread[0] == dotElemsPerThread[0] &&
          mmaElemsPerThread[1] == dotElemsPerThread[1] &&
          dotOperandLayout.getParent() == mmaLayout &&
