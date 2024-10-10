@@ -424,10 +424,6 @@ struct ConvertLayoutOpUsingLinearLayoutsConversion
     if (!layoutIsOK(srcTy.getEncoding()) || !layoutIsOK(dstTy.getEncoding())) {
       return failure();
     }
-    if (isMmaToDotShortcut(srcTy, dstTy)) {
-      // TODO(Keren): A bug
-      return failure();
-    }
 
     assert(cvtNeedsSharedMemory(srcTy, dstTy));
 

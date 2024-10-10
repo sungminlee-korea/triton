@@ -719,9 +719,13 @@ bool isMmaToDotShortcut(RankedTensorType srcTy, RankedTensorType dstTy) {
   // when #mma = MmaEncoding<version=2, warpsPerCTA=[..., 1]>
   auto mmaLayout = dyn_cast<NvidiaMmaEncodingAttr>(srcTy.getEncoding());
   auto dotOperandLayout = dyn_cast<DotOperandEncodingAttr>(dstTy.getEncoding());
+  auto mmaElemsPerThread = getElemsPerThread(srcTy);
+  auto dotElemsPerThread = getElemsPerThread(dstTy);
   return mmaLayout && dotOperandLayout && mmaLayout.getVersionMajor() == 2 &&
          mmaLayout.getWarpsPerCTA()[1] == 1 &&
          dotOperandLayout.getOpIdx() == 0 &&
+         mmaElemsPerThread[0] == dotElemsPerThread[0] &&
+         mmaElemsPerThread[1] == dotElemsPerThread[1] &&
          dotOperandLayout.getParent() == mmaLayout &&
          !srcTy.getElementType().isF32();
 }
