@@ -1,5 +1,6 @@
 #include "TritonNVIDIAGPUToLLVM/PTXAsmFormat.h"
 #include "Utility.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Support/LLVM.h"
 
 using namespace mlir;
@@ -61,18 +62,18 @@ ValueTableV2 getValuesFromDotOperandLayoutStruct(
   auto elems = unpackLLElements(loc, value, rewriter);
   int offset{};
   ValueTableV2 vals;
-  auto vecTy = vec_ty(typeConverter->convertType(type.getElementType()), 32);
+  auto elemBitwidth = type.getElementType().getIntOrFloatBitWidth();
+  auto vecTy = vec_ty(elems[0].getType(), 32 / elemBitwidth);
 
   for (auto b = 0; b < batch; ++b)
     for (auto i = 0; i < n0; ++i) {
       for (auto j = 0; j < n1; j++) {
         auto extractElemFn = [&](auto &&...idx) {
-          auto vec = elems[offset++];
-          auto val = bitcast(vec, vecTy);
-          for (int k = 0;
-               k < 32 / type.getElementType().getIntOrFloatBitWidth(); ++k) {
-            vals[{idx...}] = extract_element(val, i32_val(k));
+          auto vec = undef(vecTy);
+          for (int k = 0; k < 32 / elemBitwidth; ++k) {
+            insert_element(vec, elems[offset++], i32_val(k));
           }
+          vals[{idx...}] = bitcast(vec, i32_ty);
         };
         extractElemFn(b, 2 * i, 2 * j);
         extractElemFn(b, 2 * i, 2 * j + 1);
