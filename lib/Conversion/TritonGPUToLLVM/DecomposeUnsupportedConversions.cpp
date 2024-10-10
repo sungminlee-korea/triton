@@ -57,22 +57,24 @@ void decomposeTensorCoreToDotLayoutConversion(ModuleOp module,
     auto srcMma = dyn_cast<MmaEncodingTrait>(srcType.getEncoding());
     auto dstDotOp =
         dyn_cast<triton::gpu::DotOperandEncodingAttr>(dstType.getEncoding());
-    auto nvidiaMma = dyn_cast<NvidiaMmaEncodingAttr>(srcMma);
-    if (srcMma && dstDotOp && !shortcutFn(srcType, dstType) && nvidiaMma &&
-        !nvidiaMma.isAmpere()) {
-      auto tmpType = RankedTensorType::get(
-          dstType.getShape(), dstType.getElementType(),
-          triton::gpu::BlockedEncodingAttr::get(
-              module.getContext(), srcType.getShape(), getSizePerThread(srcMma),
-              getOrder(srcMma), numWarps, threadsPerWarp, numCTAs));
-      auto tmp = builder.create<triton::gpu::ConvertLayoutOp>(
-          cvtOp.getLoc(), tmpType, cvtOp.getSrc());
-      addAttrs(tmp, cvtOp->getAttrs());
-      auto newConvert = builder.create<triton::gpu::ConvertLayoutOp>(
-          cvtOp.getLoc(), dstType, tmp);
-      addAttrs(newConvert, cvtOp->getAttrs());
-      cvtOp.replaceAllUsesWith(newConvert.getResult());
-      cvtOp.erase();
+    if (srcMma && dstDotOp && !shortcutFn(srcType, dstType)) {
+      auto nvidiaMma = dyn_cast<NvidiaMmaEncodingAttr>(srcMma);
+      if (!nvidiaMma || !nvidiaMma.isAmpere()) {
+        auto tmpType = RankedTensorType::get(
+            dstType.getShape(), dstType.getElementType(),
+            triton::gpu::BlockedEncodingAttr::get(
+                module.getContext(), srcType.getShape(),
+                getSizePerThread(srcMma), getOrder(srcMma), numWarps,
+                threadsPerWarp, numCTAs));
+        auto tmp = builder.create<triton::gpu::ConvertLayoutOp>(
+            cvtOp.getLoc(), tmpType, cvtOp.getSrc());
+        addAttrs(tmp, cvtOp->getAttrs());
+        auto newConvert = builder.create<triton::gpu::ConvertLayoutOp>(
+            cvtOp.getLoc(), dstType, tmp);
+        addAttrs(newConvert, cvtOp->getAttrs());
+        cvtOp.replaceAllUsesWith(newConvert.getResult());
+        cvtOp.erase();
+      }
     }
   });
 }
