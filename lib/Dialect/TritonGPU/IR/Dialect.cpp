@@ -244,6 +244,8 @@ SmallVector<unsigned> getWarpOrder(Attribute layout) {
       order.erase(it);
       order.insert(order.begin(), 0);
     }
+  } else if (auto dotOpLayout = dyn_cast<DotOperandEncodingAttr>(layout)) {
+    std::iota(order.rbegin(), order.rend(), 0);
   }
   return order;
 }
