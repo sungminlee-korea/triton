@@ -245,7 +245,13 @@ SmallVector<unsigned> getWarpOrder(Attribute layout) {
       order.insert(order.begin(), 0);
     }
   } else if (auto dotOpLayout = dyn_cast<DotOperandEncodingAttr>(layout)) {
-    std::iota(order.rbegin(), order.rend(), 0);
+    if (dotOpLayout.getOpIdx() == 0) {
+      // [0, 1]
+      std::iota(order.begin(), order.end(), 0);
+    } else {
+      // [1, 0]
+      std::iota(order.rbegin(), order.rend(), 0);
+    }
   }
   return order;
 }
@@ -2170,7 +2176,10 @@ NvidiaMmaEncodingAttr::getSizePerThreadForOperands(unsigned opIdx) const {
 SmallVector<unsigned> DotOperandEncodingAttr::getThreadsPerWarp() const {
   auto parent = getParent();
   if (auto mma = mlir::dyn_cast<NvidiaMmaEncodingAttr>(parent)) {
-    return mma.getThreadsPerWarp();
+    auto threadsPerWarp = mma.getThreadsPerWarp();
+    if (getOpIdx() == 1)
+      std::swap(threadsPerWarp[0], threadsPerWarp[1]);
+    return threadsPerWarp;
   }
   llvm::report_fatal_error(
       "getThreadsPerWarp not implemented for DotOperandEncodingAttr");
