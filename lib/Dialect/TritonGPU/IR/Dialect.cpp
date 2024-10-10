@@ -330,8 +330,6 @@ SmallVector<unsigned> getCTAsPerCGA(Attribute layout) {
   ArrayRef<unsigned> ref;
   if (auto distributedLayout = mlir::dyn_cast<DistributedEncodingTrait>(layout))
     return distributedLayout.getCTAsPerCGA();
-  else if (mlir::isa<AMDMfmaEncodingAttr, AMDWmmaEncodingAttr>(layout))
-    return {1, 1};
   else if (auto sharedLayout = mlir::dyn_cast<SharedEncodingAttr>(layout))
     ref = sharedLayout.getCTALayout().getCTAsPerCGA();
   else
@@ -344,9 +342,6 @@ SmallVector<unsigned> getCTASplitNum(Attribute layout) {
   if (auto distributedLayout =
           mlir::dyn_cast<DistributedEncodingTrait>(layout)) {
     return distributedLayout.getCTASplitNum();
-  } else if (mlir::isa<AMDMfmaEncodingAttr, AMDWmmaEncodingAttr>(layout)) {
-    res.resize(2);
-    res[0] = res[1] = 1;
   } else if (auto sharedLayout = mlir::dyn_cast<SharedEncodingAttr>(layout)) {
     res.assign(sharedLayout.getCTALayout().getCTASplitNum().begin(),
                sharedLayout.getCTALayout().getCTASplitNum().end());
@@ -361,8 +356,6 @@ SmallVector<unsigned> getCTAOrder(Attribute layout) {
   if (auto distributedLayout =
           mlir::dyn_cast<DistributedEncodingTrait>(layout)) {
     res = distributedLayout.getCTAOrder();
-  } else if (mlir::isa<AMDMfmaEncodingAttr, AMDWmmaEncodingAttr>(layout)) {
-    return {0, 1};
   } else if (auto sharedLayout = mlir::dyn_cast<SharedEncodingAttr>(layout)) {
     res = SmallVector<unsigned>(sharedLayout.getCTALayout().getCTAOrder());
   } else {
